@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.8.34511.84
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skew_Area", "Skew_Area\Skew_Area.csproj", "{C2A47089-4640-4F16-8F1A-212FF9FB52C7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SkewArea", "Skew_Area\SkewArea.csproj", "{C2A47089-4640-4F16-8F1A-212FF9FB52C7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

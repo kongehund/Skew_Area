@@ -5,8 +5,8 @@ using System.Numerics;
 
 namespace Skew_Area;
 
-[PluginName("Skew_Area")]
-public class Skew_Area : IPositionedPipelineElement<IDeviceReport>
+[PluginName("Skew Area")]
+public class SkewArea : IPositionedPipelineElement<IDeviceReport>
 {
     private float _skewAngleY;
     [Property("Y Angle"), ToolTip("The angle in degrees to rotate the Y-axis clockwise"), DefaultPropertyValue(0f)]

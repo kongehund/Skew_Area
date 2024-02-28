@@ -22,16 +22,33 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
         set
         {
             _skewAngleY = Math.Clamp(value, -60, 60);
-            skewMatrix = Matrix3x2.CreateSkew((float)(_skewAngleY * Math.PI / 180), 0);
             //LogInfo();
         }
 
         get => _skewAngleY;
     }
+    public Matrix3x2 SkewMatrix 
+        => Matrix3x2.CreateSkew((float)(_skewAngleY * Math.PI / 180), 0, new Vector2(inner_x_max - inner_x_min, area_y_max - area_y_min));
 
-    public Matrix3x2 skewMatrix = Matrix3x2.Identity;
+    public Vector2 Skew(Vector2 input) => Vector2.Transform(input, SkewMatrix);
 
-    public Vector2 Skew(Vector2 input) => Vector2.Transform(input, skewMatrix);
+    //private Matrix3x2 _unskewMatrix;
+    //public Matrix3x2 UnskewMatrix
+    //{
+    //    get
+    //    {
+    //        Matrix3x2.Invert(SkewMatrix, out _unskewMatrix);
+    //        return _unskewMatrix;
+    //    }
+    //}
+
+    /// <summary>
+    /// Matrix which skews 
+    /// </summary>
+    public Matrix3x2 UnskewMatrix
+        => Matrix3x2.CreateSkew((float)(-_skewAngleY * Math.PI / 180), 0, new Vector2(inner_x_max - inner_x_min, area_y_max - area_y_min));
+
+    public Vector2 Unskew(Vector2 input) => Vector2.Transform(input, UnskewMatrix);
     #endregion
 
     #region Essential Methods
@@ -46,7 +63,7 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
 
     public event Action<IDeviceReport>? Emit;
 
-    public PipelinePosition Position => PipelinePosition.PostTransform; 
+    public PipelinePosition Position => PipelinePosition.PostTransform;
     #endregion
 
 
@@ -78,7 +95,7 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
             }
             else
                 output_mode_type = OutputModeType.unknown;
-            Log.Write("SkewArea",  $"output is of type {output?.GetType().ToString() ?? "null"}, So OutputModeType = {output_mode_type}");
+            Log.Write("SkewArea", $"output is of type {output?.GetType().ToString() ?? "null"}, So OutputModeType = {output_mode_type}");
             Log.Write("Info", "Finished running try_resolve_output_mode()");
         }
     }
@@ -88,11 +105,11 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
         LogInputDevices();
         Log.Write("SkewArea", "Logging SkewArea info...");
         Log.Write("Area", $"skew matrix for SkewAngleY = {_skewAngleY}: " +
-                $"\n{skewMatrix.M11}| {skewMatrix.M12}" +
-                $"\n{skewMatrix.M21}| {skewMatrix.M22}" +
-                $"\n{skewMatrix.M31}| {skewMatrix.M32}" +
+                $"\n{SkewMatrix.M11}| {SkewMatrix.M12}" +
+                $"\n{SkewMatrix.M21}| {SkewMatrix.M22}" +
+                $"\n{SkewMatrix.M31}| {SkewMatrix.M32}" +
                 $"\nwhich for an input (10, 10) gives {Skew(new Vector2(10, 10))}");
-                //$"\nwhich gives the following inner rectangle: x= {inner_x_min} .. {inner_x_max} and y = {area_y_min} .. {area_y_max}");
+        //$"\nwhich gives the following inner rectangle: x= {inner_x_min} .. {inner_x_max} and y = {area_y_min} .. {area_y_max}");
     }
     private void LogInputDevices()
     {
@@ -124,14 +141,14 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
     float area_x_max;
     float area_y_min;
     float area_y_max;
-    bool tabletAreaExists = false;
+    bool displayAreaExists = false;
 
     private static bool isFirstTimeWeHaveAbsoluteOutputMode = true;
 
     /// <summary>
     /// Attempts to define the corners of the tablet area.
     /// </summary>
-    private void GetTabletArea()
+    private void GetDisplayArea()
     {
         if (output_mode_type is OutputModeType.absolute)
         {
@@ -163,7 +180,7 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
             area_x_max = offset.X + (display.Width / 2);
             area_y_min = offset.Y - (display.Height / 2);
             area_y_max = offset.Y + (display.Height / 2);
-            tabletAreaExists = true;
+            displayAreaExists = true;
             if (isFirstTimeWeHaveAbsoluteOutputMode)
             {
                 Log.Write($"SkewArea", "We have the following tablet area coordinates:" +
@@ -179,7 +196,7 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
             return;
         }
         try_resolve_output_mode();
-        tabletAreaExists = false;
+        displayAreaExists = false;
     }
 
     float inner_x_min, inner_x_max;
@@ -191,10 +208,10 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
     /// <returns>Whether operation succeeded</returns>
     private bool GetInnerRectangle()
     {
-        if (!tabletAreaExists)
+        if (!displayAreaExists)
         {
-            GetTabletArea();
-            if (!tabletAreaExists)
+            GetDisplayArea();
+            if (!displayAreaExists)
                 return false;
         }
 
@@ -234,6 +251,21 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
         return output;
     }
 
+    private Vector2? InnerRectangleToArea(Vector2 input)
+    {
+        if (!GetInnerRectangle())
+            return null;
+        float scaleX =  (area_x_max - area_x_min) / (inner_x_max - inner_x_min);
+
+        float offsetInputXToOrigin = SkewAngleY > 0 ? -area_x_max : -area_x_min;
+        Vector2 offsetInputToOrigin = new Vector2(offsetInputXToOrigin, 0);
+        Vector2 inputAtOrigin = input + offsetInputToOrigin;
+        Vector2 outputAtOrigin = new Vector2(inputAtOrigin.X * scaleX, inputAtOrigin.Y);
+        Vector2 output = outputAtOrigin - offsetInputToOrigin;
+
+        return output;
+    }
+
     /// <summary>
     /// Takes a point from the tablet area and transforms it to reside within the inner parallelogram
     /// </summary>
@@ -250,6 +282,17 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
         return parallelogramCoordinate;
     }
 
+    private Vector2? ParallelogramToInnerRectangle(Vector2 input) => Unskew(input);
+
+    private Vector2? ParallelogramToArea(Vector2 input)
+    {
+        Vector2? innerRectangleCoords = ParallelogramToInnerRectangle(input);
+        if (innerRectangleCoords == null)
+            return null;
+
+        return InnerRectangleToArea((Vector2)innerRectangleCoords);
+    }
+
     /// <summary>
     /// The final filter
     /// </summary>
@@ -259,11 +302,11 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
     {
         if (output_mode_type is OutputModeType.absolute)
         {
-            Vector2? parallelogramCoordinate = AreaToInnerRectangle(input);
-            if (parallelogramCoordinate == null)
+            Vector2? output = ParallelogramToArea(input);
+            if (output == null)
                 return input;
             else
-                return (Vector2)parallelogramCoordinate;
+                return (Vector2)output;
         }
         try_resolve_output_mode();
         return input;

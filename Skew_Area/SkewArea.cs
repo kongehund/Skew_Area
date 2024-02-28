@@ -23,7 +23,7 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
         {
             _skewAngleY = Math.Clamp(value, -60, 60);
             skewMatrix = Matrix3x2.CreateSkew((float)(_skewAngleY * Math.PI / 180), 0);
-            LogInfo();
+            //LogInfo();
         }
 
         get => _skewAngleY;
@@ -49,26 +49,12 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
     public PipelinePosition Position => PipelinePosition.PostTransform; 
     #endregion
 
-    private void LogInfo()
-    {
-        //LogInputDevices();
-        Log.Write("SkewArea", "Logging SkewArea info...");
-        Log.Write("SkewArea", $"getTabletArea() = {getTabletArea()}");
-        Log.Write("SkewArea", $"getInnerRectangle() = {GetInnerRectangle()}");
-        Log.Write("Area", $"skew matrix for SkewAngleY = {_skewAngleY}: " +
-                $"\n{skewMatrix.M11}| {skewMatrix.M12}" +
-                $"\n{skewMatrix.M21}| {skewMatrix.M22}" +
-                $"\n{skewMatrix.M31}| {skewMatrix.M32}" +
-                $"\nwhich for an input (10, 10) gives {Skew(new Vector2(10, 10))}" +
-                $"\nand we have the tablet area coordinates x = {area_x_min} .. {area_x_max} and y= {area_y_min} .. {area_y_max}" +
-                $"\nwhich gives the following inner rectangle: x= {inner_x_min} .. {inner_x_max} and y = {area_y_min} .. {area_y_max}");
-    }
 
     [Resolved]
     public IDriver driver;
-    private OutputModeType output_mode_type;
-    private AbsoluteOutputMode absolute_output_mode;
-    private RelativeOutputMode relative_output_mode;
+    private OutputModeType output_mode_type = OutputModeType.unknown;
+    private AbsoluteOutputMode? absolute_output_mode = null;
+    private RelativeOutputMode? relative_output_mode = null;
     private void try_resolve_output_mode()
     {
         Log.Write("Info", "Running try_resolve_output_mode()");
@@ -93,9 +79,21 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
             else
                 output_mode_type = OutputModeType.unknown;
             Log.Write("SkewArea",  $"output is of type {output?.GetType().ToString() ?? "null"}, So OutputModeType = {output_mode_type}");
+            Log.Write("Info", "Finished running try_resolve_output_mode()");
         }
     }
 
+    private void LogInfo()
+    {
+        LogInputDevices();
+        Log.Write("SkewArea", "Logging SkewArea info...");
+        Log.Write("Area", $"skew matrix for SkewAngleY = {_skewAngleY}: " +
+                $"\n{skewMatrix.M11}| {skewMatrix.M12}" +
+                $"\n{skewMatrix.M21}| {skewMatrix.M22}" +
+                $"\n{skewMatrix.M31}| {skewMatrix.M32}" +
+                $"\nwhich for an input (10, 10) gives {Skew(new Vector2(10, 10))}");
+                //$"\nwhich gives the following inner rectangle: x= {inner_x_min} .. {inner_x_max} and y = {area_y_min} .. {area_y_max}");
+    }
     private void LogInputDevices()
     {
         Log.Write("Info", "Logging input devices...");
@@ -119,33 +117,69 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
                 }
             }
         }
+        Log.Write("Info", "Finished logging input devices.");
     }
 
     float area_x_min;
     float area_x_max;
     float area_y_min;
     float area_y_max;
+    bool tabletAreaExists = false;
 
+    private static bool isFirstTimeWeHaveAbsoluteOutputMode = true;
 
     /// <summary>
     /// Attempts to define the corners of the tablet area.
     /// </summary>
-    /// <returns>Whether operation succeeded</returns>
-    private bool getTabletArea()
+    private void GetTabletArea()
     {
-        try_resolve_output_mode();
         if (output_mode_type is OutputModeType.absolute)
         {
+            if (isFirstTimeWeHaveAbsoluteOutputMode)
+            {
+                Log.Write("SkewArea", "First time encountering absolute output mode. Logging...");
+                LogInfo();
+                Log.Write("SkewArea", "Now attempting to set var absOutput = absolute_output_mode" +
+                    $"\nWe have absolute_output_mode = {absolute_output_mode?.ToString() ?? "null"}");
+            }
             var absOutput = absolute_output_mode;
+            if (absOutput == null)
+                return;
+
+            //if (isFirstTimeWeHaveAbsoluteOutputMode)
+            //{
+            //    Log.Write("SkewArea", $"Now attempting to set var display = absOutput.Output. " +
+            //        $"\nWe have absOutput?.Output = {absOutput?.Output.ToString() ?? "null"}");
+            //}
             var display = absOutput.Output;
-            var offset = absOutput.Output.Position;
+
+            //if (isFirstTimeWeHaveAbsoluteOutputMode)
+            //{
+            //    Log.Write("SkewArea", "Now attempting to set var offset = absOutput.Output.Position");
+            //}
+            Vector2 offset = absOutput.Output.Position;
+
             area_x_min = offset.X - (display.Width / 2);
             area_x_max = offset.X + (display.Width / 2);
             area_y_min = offset.Y - (display.Height / 2);
             area_y_max = offset.Y + (display.Height / 2);
-            return true;
+            tabletAreaExists = true;
+            if (isFirstTimeWeHaveAbsoluteOutputMode)
+            {
+                Log.Write($"SkewArea", "We have the following tablet area coordinates:" +
+                    $"\nx = {area_x_min} .. {area_x_max} and y= {area_y_min} .. {area_y_max}");
+                Log.Write("SkewArea", "Getting inner rectangle...");
+                GetInnerRectangle();
+                Log.Write($"SkewArea", "We have the following inner rectangle area coordinates:" +
+                    $"\nx= {inner_x_min} .. {inner_x_max} and y = {area_y_min} .. {area_y_max}");
+
+                Log.Write("SkewArea", "Finished logging info upon first time encountering absolute output mode.");
+                isFirstTimeWeHaveAbsoluteOutputMode = false;
+            }
+            return;
         }
-        return false;
+        try_resolve_output_mode();
+        tabletAreaExists = false;
     }
 
     float inner_x_min, inner_x_max;
@@ -157,11 +191,15 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
     /// <returns>Whether operation succeeded</returns>
     private bool GetInnerRectangle()
     {
-        if (!getTabletArea())
-            return false;
+        if (!tabletAreaExists)
+        {
+            GetTabletArea();
+            if (!tabletAreaExists)
+                return false;
+        }
 
         // Calculate the horitonzal edge length of the inner parallelogram
-        float paraHorizontalEdgeLength = (area_x_max - area_x_min) - (float)Math.Tan(SkewAngleY * Math.PI / 180) * (area_y_max - area_y_min);
+        float paraHorizontalEdgeLength = (area_x_max - area_x_min) - Math.Abs((float)Math.Tan(SkewAngleY * Math.PI / 180)) * (area_y_max - area_y_min);
 
         if (SkewAngleY > 0)
         {
@@ -219,11 +257,16 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
     /// <returns></returns>
     private Vector2 Filter(Vector2 input)
     {
-        Vector2? parallelogramCoordinate = AreaToInnerRectangle(input);
-        if (parallelogramCoordinate == null)
-            return input;
-        else
-            return (Vector2)parallelogramCoordinate;
+        if (output_mode_type is OutputModeType.absolute)
+        {
+            Vector2? parallelogramCoordinate = AreaToInnerRectangle(input);
+            if (parallelogramCoordinate == null)
+                return input;
+            else
+                return (Vector2)parallelogramCoordinate;
+        }
+        try_resolve_output_mode();
+        return input;
     }
 }
 enum OutputModeType

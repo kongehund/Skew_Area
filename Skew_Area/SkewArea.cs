@@ -50,11 +50,10 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
 
     private void LogInfo()
     {
-        LogInputDevices();
+        //LogInputDevices();
         Log.Write("SkewArea", "Logging SkewArea info...");
-        Log.Write("SkewArea", $"assertOutputModeIsAbsolute() = {assertOutputModeIsAbsolute()}");
         Log.Write("SkewArea", $"getTabletArea() = {getTabletArea()}");
-        Log.Write("SkewArea", $"getInnerRectangle() = {getInnerRectangle()}");
+        Log.Write("SkewArea", $"getInnerRectangle() = {GetInnerRectangle()}");
         Log.Write("Area", $"skew matrix for SkewAngleY = {_skewAngleY}: " +
                 $"\n{skewMatrix.M11}| {skewMatrix.M12}" +
                 $"\n{skewMatrix.M21}| {skewMatrix.M22}" +
@@ -65,62 +64,47 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
     }
 
     [Resolved]
-    public IDriver driver = null!;
-    private AbsoluteOutputMode? outputMode;
-    /// <summary>
-    /// If the output mode is absolute, saves the <see cref="AbsoluteOutputMode"/> variable as <see cref="outputMode"/>. 
-    /// This is required in order to obtain the tablet area's dimensions and offset.
-    /// </summary>
-    /// <returns>Whether the output mode is absolute</returns>
-    /// <exception cref="InvalidOperationException"></exception>
-    private bool assertOutputModeIsAbsolute()
+    public IDriver driver;
+    private OutputModeType output_mode_type;
+    private AbsoluteOutputMode absolute_output_mode;
+    private RelativeOutputMode relative_output_mode;
+    private void try_resolve_output_mode()
     {
-        if (driver == null)
-        {
-            Log.Write("SkewArea", "driver was null");
-            throw new InvalidOperationException("driver was null");
-        }
+        Log.Write("Info", "Running try_resolve_output_mode()");
         if (driver is Driver drv)
         {
-            IOutputMode? output = drv.InputDevices
+            IOutputMode output = drv.InputDevices
                 .Where(dev => dev?.OutputMode?.Elements?.Contains(this) ?? false)
                 .Select(dev => dev?.OutputMode).FirstOrDefault();
 
-            if (output is AbsoluteOutputMode absOutput)
+            if (output is AbsoluteOutputMode abs_output)
             {
-                outputMode = absOutput;
-                return true;
+                absolute_output_mode = abs_output;
+                output_mode_type = OutputModeType.absolute;
             }
-            else if (output is null)
+            else if (output is RelativeOutputMode rel_output)
             {
-                Log.Write("SkewArea", $"output was null");
-                return false;
+                relative_output_mode = rel_output;
+                output_mode_type = OutputModeType.relative;
             }
             else
-            {
-                Log.Write("SkewArea", $"output was not AbsoluteOutputMode but was {output.GetType()}");
-                return false;
-            }
-        }
-        else
-        {
-            Log.Write("SkewArea", "driver was not of type Driver");
-            return false;
+                output_mode_type = OutputModeType.unknown;
+            Log.Write("SkewArea",  $"output is of type {output?.GetType().ToString() ?? "null"}, So OutputModeType = {output_mode_type}");
         }
     }
 
     private void LogInputDevices()
     {
-        Log.Write("Info", "Logging input devices...");
-        if (driver is Driver drv)
-        {
-            foreach (var dev in drv.InputDevices)
-            {
-                Log.Write("Info", $"InputDevice \"{nameof(dev)}\" with type {dev.GetType()} " +
-                    $"\nand Output mode dev.OutputMode {dev.OutputMode} with type {dev.OutputMode?.GetType()}" +
-                    $"\nand dev.OutputMode.Elements {dev.OutputMode?.Elements} with type {dev.OutputMode?.Elements.GetType()}");
-            }
-        }
+        //Log.Write("Info", "Logging input devices...");
+        //if (driver is Driver drv)
+        //{
+        //    foreach (var dev in drv.InputDevices)
+        //    {
+        //        Log.Write("Info", $"InputDevice \"{nameof(dev)}\" with type {dev.GetType()} " +
+        //            $"\nand Output mode dev.OutputMode {dev.OutputMode} with type {dev.OutputMode?.GetType()}" +
+        //            $"\nand dev.OutputMode.Elements {dev.OutputMode?.Elements} with type {dev.OutputMode?.Elements.GetType()}");
+        //    }
+        //}
     }
 
     float area_x_min;
@@ -135,11 +119,12 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
     /// <returns>Whether operation succeeded</returns>
     private bool getTabletArea()
     {
-        assertOutputModeIsAbsolute();
-        if (outputMode is not null)
+        try_resolve_output_mode();
+        if (output_mode_type is OutputModeType.absolute)
         {
-            var display = outputMode.Output;
-            var offset = outputMode.Output.Position;
+            var absOutput = absolute_output_mode;
+            var display = absOutput.Output;
+            var offset = absOutput.Output.Position;
             var shiftoffX = offset.X - (display.Width / 2);
             var shiftoffY = offset.Y - (display.Height / 2);
             area_x_min = offset.X - (display.Width / 2);
@@ -158,7 +143,7 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
     /// Attempts to define the corners of the inner rectangle (which will be skewed by the skew matrix to yield the inner parallelogram).
     /// </summary>
     /// <returns>Whether operation succeeded</returns>
-    private bool getInnerRectangle()
+    private bool GetInnerRectangle()
     {
         if (!getTabletArea())
             return false;
@@ -186,7 +171,7 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
     /// <returns>The coordinate transformed to the inner rectangle. Null if there's no absolute tablet area</returns>
     private Vector2? AreaToInnerRectangle(Vector2 input)
     {
-        if (!getInnerRectangle())
+        if (!GetInnerRectangle())
             return null;
         float scaleX = (inner_x_max - inner_x_min) / (area_x_max - area_x_min);
 
@@ -229,4 +214,9 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
             return (Vector2)parallelogramCoordinate;
     }
 }
-
+enum OutputModeType
+{
+    absolute,
+    relative,
+    unknown
+}

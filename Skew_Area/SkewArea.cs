@@ -7,6 +7,7 @@ using OpenTabletDriver.Plugin.Output;
 using OpenTabletDriver.Plugin.Platform.Display;
 using OpenTabletDriver.Plugin.Tablet;
 using System.Numerics;
+using System.Xml.Linq;
 
 namespace Skew_Area;
 
@@ -77,6 +78,8 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
                 .Where(dev => dev?.OutputMode?.Elements?.Contains(this) ?? false)
                 .Select(dev => dev?.OutputMode).FirstOrDefault();
 
+            LogInputDevices();
+
             if (output is AbsoluteOutputMode abs_output)
             {
                 absolute_output_mode = abs_output;
@@ -95,16 +98,27 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
 
     private void LogInputDevices()
     {
-        //Log.Write("Info", "Logging input devices...");
-        //if (driver is Driver drv)
-        //{
-        //    foreach (var dev in drv.InputDevices)
-        //    {
-        //        Log.Write("Info", $"InputDevice \"{nameof(dev)}\" with type {dev.GetType()} " +
-        //            $"\nand Output mode dev.OutputMode {dev.OutputMode} with type {dev.OutputMode?.GetType()}" +
-        //            $"\nand dev.OutputMode.Elements {dev.OutputMode?.Elements} with type {dev.OutputMode?.Elements.GetType()}");
-        //    }
-        //}
+        Log.Write("Info", "Logging input devices...");
+        if (driver is Driver drv)
+        {
+            foreach (var dev in drv.InputDevices)
+            {
+                Log.Write("Info", $"InputDevice \"{nameof(dev)}\" with type {dev.GetType()}");
+                Log.Write("Info", $"and Output mode dev.OutputMode {dev.OutputMode} with type {dev.OutputMode?.GetType()}\"");
+                if (dev.OutputMode == null)
+                    continue;
+                Log.Write("Info", $"and dev.OutputMode.Elements:");
+                if (dev.OutputMode.Elements == null)
+                {
+                    Log.Write("Info", $"dev.OutputMode.Elements is null...");
+                    continue;
+                }
+                foreach (var element in dev.OutputMode.Elements)
+                {
+                    Log.Write("Info", $"element {element} of type {element.GetType()}");
+                }
+            }
+        }
     }
 
     float area_x_min;
@@ -125,8 +139,6 @@ public class SkewArea : IPositionedPipelineElement<IDeviceReport>
             var absOutput = absolute_output_mode;
             var display = absOutput.Output;
             var offset = absOutput.Output.Position;
-            var shiftoffX = offset.X - (display.Width / 2);
-            var shiftoffY = offset.Y - (display.Height / 2);
             area_x_min = offset.X - (display.Width / 2);
             area_x_max = offset.X + (display.Width / 2);
             area_y_min = offset.Y - (display.Height / 2);

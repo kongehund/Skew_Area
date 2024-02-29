@@ -1,6 +1,6 @@
 # Skew_Area
 
-A plugin for OpenTabletDriver which creates a parallelogram inside the display area based on an angle "Y Skew".
+A plugin for [OpenTabletDriver](https://github.com/OpenTabletDriver/OpenTabletDriver) which creates a parallelogram inside the display area based on an angle "Y Skew".
 Enabling the filter will constrain the input area to the parallelogram. The input is then transformed to fit the entire display area.
 
 ![Skew](https://github.com/kongehund/Skew_Area/assets/63306696/98f49615-382d-4964-9a05-93cb62afb18b)
